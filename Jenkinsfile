@@ -127,18 +127,27 @@ EOF
                 echo "----- Tests de connectivite interne au réseau Docker -----"
                 script {
                     try {
-                        // VÉRIFICATION NATIVE : Utilisation de Node.js (natif dans l'image) au lieu de curl
+                        // Utilisation de triples guillemets pour sanitariser la commande transmise au conteneur
                         def statusCodeBackend = sh(
-                            script: "docker compose exec -T backend node -e \"const http = require('http'); http.get('http://localhost:5000/api/health', (res) => { console.log(res.statusCode); process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', (e) => { console.log(0); process.exit(1); });\"", 
+                            script: """docker compose exec -T backend node -e "
+                                const http = require('http');
+                                http.get('http://localhost:5000/api/health', (res) => {
+                                    console.log(res.statusCode);
+                                    process.exit(0);
+                                }).on('error', (e) => {
+                                    console.log('ERREUR');
+                                    process.exit(1);
+                                });
+                            \"""", 
                             returnStdout: true
                         ).trim()
                         
                         echo "Vérification de l'API Backend (interne) : Code HTTP ${statusCodeBackend}"
                         
-                        if (statusCodeBackend == "200") {
+                        if (statusCodeBackend.contains("200")) {
                             echo "✅ L'application ProShop est saine et répond parfaitement (HTTP 200) !"
                         } else {
-                            echo "⚠️ L'application a démarré mais l'endpoint de santé renvoie un statut instable : ${statusCodeBackend}"
+                            echo "⚠️ L'application a démarré mais l'endpoint de santé renvoie un statut inattendu : ${statusCodeBackend}"
                         }
                     } catch (err) {
                         echo "⚠️ Impossible de valider l'état du backend via le script interne."
@@ -146,7 +155,6 @@ EOF
                 }
             }
         }
-    }
 
     post {
         always {
