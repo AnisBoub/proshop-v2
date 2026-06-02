@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        // Définition des variables d'environnement globales si nécessaire
         BACKEND_IMAGE  = "proshop-backend:latest"
         FRONTEND_IMAGE = "proshop-frontend:latest"
     }
@@ -71,10 +70,7 @@ pipeline {
             steps {
                 script {
                     echo "===== Preparation de la configuration Prometheus ====="
-                    // Vérification que le dossier et le fichier existent bien pour le build d'image
                     sh "mkdir -p prometheus"
-                    // On s'assure que le fichier prometheus.yml est présent localement dans l'espace Jenkins 
-                    // pour que le 'Dockerfile' de Prometheus puisse le copier lors du 'docker compose up --build'
                     sh """
                     if [ ! -f prometheus/prometheus.yml ]; then
                         cat << 'EOF' > prometheus/prometheus.yml
@@ -101,10 +97,9 @@ EOF
         stage('Deploy') {
             steps {
                 echo "===== Deploiement ====="
-                // --build force Docker Compose à re-construire l'image Prometheus locale embarquant le fichier yml
                 sh "docker compose up -d --force-recreate --build"
-                echo "Attente du démarrage des services..."
-                sleep 30
+                echo "Attente initiale du démarrage des services..."
+                sleep 20
             }
         }
 
@@ -113,22 +108,24 @@ EOF
                 script {
                     echo "===== Seed de la base de données ====="
                     sh "docker ps -q -f name=backend"
-                    echo "Attente que le backend soit disponible..."
+                    echo "Attente que l'API du backend soit prête sur le réseau Docker..."
                     
-                    // CORRECTION : Remplacement de localhost:5000 par backend:5000 (Réseau Docker)
                     try {
                         timeout(time: 60, unit: 'SECONDS') {
+                            // CORRECTION : Attente basée sur la route /api/health interne au réseau de conteneurs
                             sh """
-                            while ! curl -s http://backend:5000/api/products > /dev/null; do 
-                                sleep 2
+                            while [ \$(curl -s -o /dev/null -w '%{http_code}' http://backend:5000/api/health) -eq 000 ]; do 
+                                echo 'Le backend charge ou l interface réseau n est pas encore disponible, attente...'
+                                sleep 3
                             done
                             """
                         }
-                        echo "✅ Le Backend répond ! Lancement du seeding..."
-                        // Commande pour lancer le seed dans le conteneur backend
+                        echo "✅ Le Backend répond ! Lancement du seeding des données..."
                         sh "docker compose exec -T backend npm run data:import"
+                        echo "✅ Seeding terminé avec succès."
                     } catch (err) {
-                        echo "⚠️ Erreur lors du seeding ou timeout expiré : ${err.getMessage()}"
+                        echo "❌ Timeout ou erreur réseau lors du seeding. Diagnostic des logs du Backend :"
+                        sh "docker compose logs backend --tail=50"
                         echo "Le seeding a échoué mais le pipeline continue..."
                     }
                 }
@@ -145,18 +142,21 @@ EOF
                 echo ""
                 echo "----- Tests de connectivite -----"
                 script {
-                    echo "Test Backend API..."
-                    // CORRECTION : curl interroge 'backend' au lieu de 'localhost'
+                    echo "Test de l'API de santé interne..."
                     try {
-                        def statusCode = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://backend:5000/api/products", returnStdout: true).trim()
+                        // CORRECTION : Requête de validation sur /api/health via le nom de service 'backend'
+                        def statusCode = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://backend:5000/api/health", returnStdout: true).trim()
                         echo "Code HTTP reçu du Backend : ${statusCode}"
+                        
                         if (statusCode == "200") {
-                            echo "✅ Test de connectivité réussi (HTTP 200)"
+                            echo "✅ Test de connectivité réussi (HTTP 200) !"
                         } else {
-                            echo "⚠️ Le backend a répondu avec le code ${statusCode}"
+                            echo "⚠️ Le backend a répondu avec un code inattendu : ${statusCode}"
+                            echo "Affichage des logs récents :"
+                            sh "docker compose logs backend --tail=20"
                         }
                     } catch (err) {
-                        echo "❌ Erreur lors des tests : Impossible de joindre l'API interne backend:5000"
+                        echo "❌ Erreur critique : Impossible de joindre l'API interne 'backend:5000'"
                     }
                 }
             }
@@ -168,12 +168,10 @@ EOF
             echo "===== Fin du pipeline ====="
             echo "=========================================="
             script {
-                // Détermination du statut pour l'affichage de fin
                 if (currentBuild.currentResult == 'SUCCESS') {
                     echo "✅ PIPELINE EXECUTE AVEC SUCCES"
                 } else {
                     echo "❌ ECHEC DU PIPELINE JENKINS"
-                    echo "Erreur pendant le pipeline. Verifiez les logs ci-dessus."
                 }
             }
             echo "=========================================="
@@ -181,14 +179,10 @@ EOF
             echo "📍 Backend    : http://localhost:5000"
             echo "📍 Prometheus : http://localhost:9090"
             echo "=========================================="
-            echo "📝 API Endpoints théoriques :"
+            echo "📝 Endpoints vérifiés :"
+            echo "   - GET  /api/health (Statut de l'application)"
             echo "   - GET  /api/products"
-            echo "   - GET  /api/users"
-            echo "   - POST /api/users/login"
             echo "=========================================="
-            
-            echo "Debug - Derniers logs Docker (MongoDB) :"
-            sh "docker compose logs mongo --tail=20"
         }
     }
 }

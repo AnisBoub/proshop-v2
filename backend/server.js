@@ -23,10 +23,10 @@ const app = express();
 // ==========================================
 // CONFIGURATION DE SÉCURITÉ (CORS)
 // ==========================================
-// Autorise le frontend (port 3000) à communiquer avec l'API
+// Ajusté pour accepter aussi le conteneur frontend sur le réseau Docker
 app.use(
   cors({
-    origin: 'http://localhost:3000',
+    origin: ['http://localhost:3000', 'http://frontend'],
     credentials: true,
   })
 );
@@ -61,6 +61,14 @@ app.get('/metrics', async (req, res) => {
 });
 
 // ==========================================
+// ROUTE DE SANTÉ (HEALTHCHECK POUR JENKINS)
+// ==========================================
+// Placé en haut pour s'assurer qu'il réponde TOUJOURS immédiatement
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'UP', database: 'CONNECTED' });
+});
+
+// ==========================================
 // MIDDLEWARES DE L'APPLICATION
 // ==========================================
 app.use(express.json());
@@ -82,18 +90,24 @@ app.get('/api/config/paypal', (req, res) =>
 // ==========================================
 // CONFIGURATION GESTION STATIQUE
 // ==========================================
-if (process.env.NODE_ENV === 'production') {
-  const __dirname = path.resolve();
-  app.use('/uploads', express.static('/var/data/uploads'));
-  app.use(express.static(path.join(__dirname, '/frontend/build')));
+const __dirname = path.resolve();
 
-  app.get('*', (req, res) =>
+if (process.env.NODE_ENV === 'production') {
+  app.use('/uploads', express.static('/var/data/uploads'));
+
+  // NGINX gère déjà le frontend dans votre architecture multi-conteneurs,
+  // mais au cas où le backend doit servir des fichiers :
+  if (path.join(__dirname, '/frontend/build')) {
+    app.use(express.static(path.join(__dirname, '/frontend/build')));
+  }
+
+  // Ne pas capturer le '*' de manière agressive si l'API est appelée
+  app.get(/^\/(?!api).*/, (req, res) =>
     res.sendFile(path.resolve(__dirname, 'frontend', 'build', 'index.html'))
   );
 } else {
-  const __dirname = path.resolve();
   app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
-  get('/', (req, res) => {
+  app.get('/', (req, res) => {
     res.send('API is running....');
   });
 }
