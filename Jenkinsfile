@@ -45,14 +45,14 @@ pipeline {
             steps {
                 echo '===== Deploiement ====='
                 sh '''
-                # 1. Arrêt propre des conteneurs
-                docker compose down --volumes || true
+                # 1. Arrêt complet et suppression agressive des conteneurs/volumes associés
+                docker compose down --volumes --remove-orphans || true
                 
-                # 2. Nettoyage du faux dossier créé par erreur et réécriture propre du fichier
-                if [ -d "prometheus/prometheus.yml" ]; then
-                    rm -rf prometheus/prometheus.yml
-                fi
+                # 2. Utilisation d'un conteneur Alpine temporaire en tant que ROOT Docker 
+                # pour forcer la suppression du faux dossier bloquant s'il existe
+                docker run --rm -v $(pwd):/workspace alpine rm -rf /workspace/prometheus/prometheus.yml || true
                 
+                # 3. Recréation propre de l'arborescence et du fichier de configuration
                 mkdir -p prometheus
                 cat << 'EOF' > prometheus/prometheus.yml
 global:
@@ -73,10 +73,10 @@ scrape_configs:
       - targets: ['node-exporter:9100']
 EOF
 
-                # 3. Lancement de l'application
+                # 4. Relancement propre de l'environnement
                 docker compose up -d --build --force-recreate
                 
-                # 4. Attente et injection des données de test
+                # 5. Attente du démarrage et injection des données
                 sleep 15
                 docker compose exec -T backend node backend/seeder.js || true
                 '''
