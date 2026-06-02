@@ -45,9 +45,16 @@ pipeline {
             steps {
                 echo '===== Deploiement ====='
                 sh '''
+                # Arrêt propre
                 docker compose down --volumes || true
+                
+                # Forcer la création du volume Prometheus et y injecter la conf
+                docker volume create proshop-ci-cd2_prometheus-data || true
+                docker run --rm -v proshop-ci-cd2_prometheus-data:/target -v $(pwd)/prometheus:/source alpine cp /source/prometheus.yml /target/prometheus.yml
+                
+                # Lancement global
                 docker compose up -d --build --force-recreate
-                sleep 10
+                sleep 15
                 docker compose exec -T backend node backend/seeder.js || true
                 '''
             }

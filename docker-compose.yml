@@ -5,7 +5,7 @@ services:
     ports:
       - '27017:27017'
     volumes:
-      - ./mongo-data:/data/db
+      - mongo-data:/data/db
     networks:
       - proshop-network
 
@@ -48,10 +48,10 @@ services:
     ports:
       - '9090:9090'
     volumes:
-      - ./prometheus:/etc/prometheus
+      # On utilise un volume nommé pour éviter le conflit de montage Jenkins
+      - prometheus-data:/etc/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/tmp/prometheus' # Évite les conflits d'écriture sur le workspace Jenkins
     networks:
       - proshop-network
 
@@ -74,3 +74,7 @@ services:
 networks:
   proshop-network:
     driver: bridge
+
+volumes:
+  mongo-data:
+  prometheus-data:
