@@ -39,7 +39,7 @@ services:
     image: proshop-prometheus:latest
     build:
       context: .
-      dockerfile: prometheus/Dockerfile
+      dockerfile: prometheus/Dockerfile.prometheus
     container_name: prometheus
     ports:
       - '9090:9090'
