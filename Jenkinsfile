@@ -127,10 +127,10 @@ EOF
                 echo "----- Tests de connectivite interne au réseau Docker -----"
                 script {
                     try {
-                        // 1. Écriture du script avec l'extension .cjs pour forcer le mode CommonJS
+                        // 1. Écriture du script avec 127.0.0.1 au lieu de localhost pour garantir la résolution réseau
                         writeFile file: 'test-health.cjs', text: '''
 const http = require('http');
-http.get('http://localhost:5000/api/health', (res) => {
+http.get('http://127.0.0.1:5000/api/health', (res) => {
     console.log(res.statusCode);
     process.exit(0);
 }).on('error', (e) => {
