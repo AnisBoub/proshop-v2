@@ -48,8 +48,10 @@ services:
     ports:
       - '9090:9090'
     volumes:
-      # On utilise un volume nommé pour éviter le conflit de montage Jenkins
-      - prometheus-data:/etc/prometheus
+      # On monte directement le fichier de configuration spécifique en lecture seule
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # On crée un volume anonyme pour que Prometheus puisse écrire ses données sans toucher au workspace Jenkins
+      - /prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
     networks:
