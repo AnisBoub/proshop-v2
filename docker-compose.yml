@@ -1,27 +1,29 @@
-version: '3.8'
-
 services:
   mongo:
     image: mongo:6
     container_name: mongo
+    ports:
+      - '27017:27017'
     networks:
       proshop-network:
         aliases:
           - mongo
-    # ... reste de votre config (ports, volumes)
 
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: backend
+    ports:
+      - '5000:5000'
     environment:
       - MONGO_URI=mongodb://mongo:27017/proshop
     networks:
       proshop-network:
         aliases:
           - backend
-    # ... reste de votre config
+    depends_on:
+      - mongo
 
   frontend:
     build:
