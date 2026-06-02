@@ -127,8 +127,8 @@ EOF
                 echo "----- Tests de connectivite interne au réseau Docker -----"
                 script {
                     try {
-                        // 1. Écriture propre du script JS de test dans un fichier temporaire local
-                        writeFile file: 'test-health.js', text: '''
+                        // 1. Écriture du script avec l'extension .cjs pour contourner le mode ES Module
+                        writeFile file: 'test-health.cjs', text: '''
 const http = require('http');
 http.get('http://localhost:5000/api/health', (res) => {
     console.log(res.statusCode);
@@ -138,11 +138,11 @@ http.get('http://localhost:5000/api/health', (res) => {
     process.exit(0);
 });
 '''
-                        // 2. Copie et exécution propre dans le conteneur backend sans aucun conflit de guillemets
-                        sh "docker cp test-health.js \$(docker compose ps -q backend):/app/test-health.js"
+                        // 2. Copie et exécution avec la bonne extension .cjs
+                        sh "docker cp test-health.cjs \$(docker compose ps -q backend):/app/test-health.cjs"
                         
                         def statusCodeBackend = sh(
-                            script: "docker compose exec -T backend node /app/test-health.js", 
+                            script: "docker compose exec -T backend node /app/test-health.cjs", 
                             returnStdout: true
                         ).trim()
                         
@@ -154,8 +154,8 @@ http.get('http://localhost:5000/api/health', (res) => {
                             echo "⚠️ L'application a démarré mais l'endpoint de santé renvoie un statut inattendu : ${statusCodeBackend}"
                         }
                         
-                        // Nettoyage du fichier de test
-                        sh "rm -f test-health.js"
+                        // Nettoyage du fichier
+                        sh "rm -f test-health.cjs"
                         
                     } catch (err) {
                         echo "⚠️ Impossible de valider l'état du backend via le script interne."
@@ -163,7 +163,6 @@ http.get('http://localhost:5000/api/health', (res) => {
                 }
             }
         }
-    }
 
     post {
         always {
