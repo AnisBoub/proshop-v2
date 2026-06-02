@@ -47,6 +47,8 @@ pipeline {
                 sh '''
                 docker compose down || true
                 docker compose up -d --build
+                sleep 10
+                docker compose exec -T backend node backend/seeder.js
                 '''
             }
         }

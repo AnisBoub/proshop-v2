@@ -5,7 +5,7 @@ services:
     ports:
       - '27017:27017'
     volumes:
-      - D:/Caplogy/2025/ynov/devops/tp:/data/db
+      - ./mongo-data:/data/db
     networks:
       - proshop-network
 
@@ -36,6 +36,8 @@ services:
     restart: always
     ports:
       - '3000:80'
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000
     depends_on:
       - backend
     networks:
