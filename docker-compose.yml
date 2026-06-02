@@ -1,13 +1,10 @@
-version: '3.8'
-
 services:
 
   mongo:
     image: mongo:6
-    container_name: proshop-mongo
     restart: always
     ports:
-      - '27017:27017'
+      - "27017:27017"
     volumes:
       - D:/Caplogy/2025/ynov/devops/tp:/data/db
     networks:
@@ -17,10 +14,9 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    container_name: proshop-backend
     restart: always
     ports:
-      - '5000:5000'
+      - "5000:5000"
     environment:
       NODE_ENV: development
       PORT: 5000
@@ -36,10 +32,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: proshop-frontend
     restart: always
     ports:
-      - '3000:80'
+      - "3000:80"
     depends_on:
       - backend
     networks:
@@ -47,18 +42,16 @@ services:
 
   prometheus:
     image: prom/prometheus
-    container_name: prometheus
     restart: always
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus:/etc/prometheus
     networks:
       - proshop-network
 
   grafana:
     image: grafana/grafana
-    container_name: grafana
     restart: always
     ports:
       - "3001:3000"
@@ -67,7 +60,6 @@ services:
 
   node-exporter:
     image: prom/node-exporter
-    container_name: node-exporter
     restart: always
     ports:
       - "9100:9100"
