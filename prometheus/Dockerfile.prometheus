@@ -1,3 +1,4 @@
-FROM prom/prometheus:latest
-# On copie le fichier généré par le pipeline directement au bon endroit dans l'image
+FROM prom/prometheus:v2.45.0
+
+# Copie de la configuration directement dans l'image
 COPY prometheus.yml /etc/prometheus/prometheus.yml
