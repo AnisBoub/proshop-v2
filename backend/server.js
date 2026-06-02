@@ -23,7 +23,7 @@ const app = express();
 // ==========================================
 // CONFIGURATION DE SÉCURITÉ (CORS)
 // ==========================================
-// Permet au frontend sur le port 3000 de requêter cette API sans blocage navigateur
+// Autorise le frontend (port 3000) à communiquer avec l'API
 app.use(
   cors({
     origin: 'http://localhost:3000',
@@ -34,21 +34,16 @@ app.use(
 // ==========================================
 // CONFIGURATION PROMETHEUS (MÉTRIQUES)
 // ==========================================
-
-// 1. Activer la collecte des métriques système par défaut (CPU, mémoire, etc.)
 client.collectDefaultMetrics();
 
-// 2. Créer un compteur personnalisé pour suivre les requêtes de la boutique
 const httpRequestsCounter = new client.Counter({
   name: 'proshop_http_requests_total',
   help: 'Nombre total de requêtes HTTP sur la boutique ProShop',
   labelNames: ['method', 'route', 'status'],
 });
 
-// 3. Middleware global pour enregistrer le trafic (placé avant les routes)
 app.use((req, res, next) => {
   res.on('finish', () => {
-    // On ignore la route /metrics elle-même pour ne pas fausser les stats
     if (req.path !== '/metrics') {
       httpRequestsCounter.inc({
         method: req.method,
@@ -60,7 +55,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// 4. Route d'exposition des métriques que Prometheus viendra lire
 app.get('/metrics', async (req, res) => {
   res.set('Content-Type', client.register.contentType);
   res.end(await client.register.metrics());
@@ -69,7 +63,6 @@ app.get('/metrics', async (req, res) => {
 // ==========================================
 // MIDDLEWARES DE L'APPLICATION
 // ==========================================
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -77,7 +70,6 @@ app.use(cookieParser());
 // ==========================================
 // ROUTES DE L'API
 // ==========================================
-
 app.use('/api/products', productRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/orders', orderRoutes);
@@ -88,9 +80,8 @@ app.get('/api/config/paypal', (req, res) =>
 );
 
 // ==========================================
-// CONFIGURATION DE PRODUCTION / GESTION STATIQUE
+// CONFIGURATION GESTION STATIQUE
 // ==========================================
-
 if (process.env.NODE_ENV === 'production') {
   const __dirname = path.resolve();
   app.use('/uploads', express.static('/var/data/uploads'));
@@ -102,7 +93,7 @@ if (process.env.NODE_ENV === 'production') {
 } else {
   const __dirname = path.resolve();
   app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
-  app.get('/', (req, res) => {
+  get('/', (req, res) => {
     res.send('API is running....');
   });
 }
@@ -110,7 +101,6 @@ if (process.env.NODE_ENV === 'production') {
 // ==========================================
 // GESTION DES ERREURS
 // ==========================================
-
 app.use(notFound);
 app.use(errorHandler);
 
