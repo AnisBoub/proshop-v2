@@ -110,7 +110,7 @@ EOF
                     try {
                         echo "Lancement du seeding à l'intérieur du conteneur Backend..."
                         sh "docker compose exec -T backend npm run data:import"
-                        echo "✅ Seeding terminé avec成功."
+                        echo "✅ Seeding terminé avec succès."
                     } catch (err) {
                         echo "❌ Échec lors de l'exécution du seeder."
                         error "Le seeding de la base de données a échoué."
@@ -127,7 +127,7 @@ EOF
                 echo "----- Tests de connectivite interne au réseau Docker -----"
                 script {
                     try {
-                        // 1. Écriture du script avec l'extension .cjs pour contourner le mode ES Module
+                        // 1. Écriture du script avec l'extension .cjs pour forcer le mode CommonJS
                         writeFile file: 'test-health.cjs', text: '''
 const http = require('http');
 http.get('http://localhost:5000/api/health', (res) => {
@@ -138,7 +138,7 @@ http.get('http://localhost:5000/api/health', (res) => {
     process.exit(0);
 });
 '''
-                        // 2. Copie et exécution avec la bonne extension .cjs
+                        // 2. Copie et exécution dans le conteneur backend
                         sh "docker cp test-health.cjs \$(docker compose ps -q backend):/app/test-health.cjs"
                         
                         def statusCodeBackend = sh(
@@ -154,7 +154,7 @@ http.get('http://localhost:5000/api/health', (res) => {
                             echo "⚠️ L'application a démarré mais l'endpoint de santé renvoie un statut inattendu : ${statusCodeBackend}"
                         }
                         
-                        // Nettoyage du fichier
+                        // 3. Nettoyage
                         sh "rm -f test-health.cjs"
                         
                     } catch (err) {
@@ -163,6 +163,7 @@ http.get('http://localhost:5000/api/health', (res) => {
                 }
             }
         }
+    }
 
     post {
         always {
