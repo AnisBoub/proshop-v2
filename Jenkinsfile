@@ -110,7 +110,7 @@ EOF
                     try {
                         echo "Lancement du seeding à l'intérieur du conteneur Backend..."
                         sh "docker compose exec -T backend npm run data:import"
-                        echo "✅ Seeding terminé avec succès."
+                        echo "✅ Seeding terminé avec成功."
                     } catch (err) {
                         echo "❌ Échec lors de l'exécution du seeder."
                         error "Le seeding de la base de données a échoué."
@@ -127,34 +127,43 @@ EOF
                 echo "----- Tests de connectivite interne au réseau Docker -----"
                 script {
                     try {
-                        // Utilisation de triples guillemets pour sanitariser la commande transmise au conteneur
+                        // 1. Écriture propre du script JS de test dans un fichier temporaire local
+                        writeFile file: 'test-health.js', text: '''
+const http = require('http');
+http.get('http://localhost:5000/api/health', (res) => {
+    console.log(res.statusCode);
+    process.exit(0);
+}).on('error', (e) => {
+    console.log("ERREUR_RESEAU");
+    process.exit(0);
+});
+'''
+                        // 2. Copie et exécution propre dans le conteneur backend sans aucun conflit de guillemets
+                        sh "docker cp test-health.js \$(docker compose ps -q backend):/app/test-health.js"
+                        
                         def statusCodeBackend = sh(
-                            script: """docker compose exec -T backend node -e "
-                                const http = require('http');
-                                http.get('http://localhost:5000/api/health', (res) => {
-                                    console.log(res.statusCode);
-                                    process.exit(0);
-                                }).on('error', (e) => {
-                                    console.log('ERREUR');
-                                    process.exit(1);
-                                });
-                            \"""", 
+                            script: "docker compose exec -T backend node /app/test-health.js", 
                             returnStdout: true
                         ).trim()
                         
-                        echo "Vérification de l'API Backend (interne) : Code HTTP ${statusCodeBackend}"
+                        echo "Vérification de l'API Backend (interne) : Code HTTP -> ${statusCodeBackend}"
                         
-                        if (statusCodeBackend.contains("200")) {
+                        if (statusCodeBackend == "200") {
                             echo "✅ L'application ProShop est saine et répond parfaitement (HTTP 200) !"
                         } else {
                             echo "⚠️ L'application a démarré mais l'endpoint de santé renvoie un statut inattendu : ${statusCodeBackend}"
                         }
+                        
+                        // Nettoyage du fichier de test
+                        sh "rm -f test-health.js"
+                        
                     } catch (err) {
                         echo "⚠️ Impossible de valider l'état du backend via le script interne."
                     }
                 }
             }
         }
+    }
 
     post {
         always {
