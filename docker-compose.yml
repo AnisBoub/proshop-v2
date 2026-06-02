@@ -48,12 +48,10 @@ services:
     ports:
       - '9090:9090'
     volumes:
-      # On monte directement le fichier de configuration spécifique en lecture seule
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      # On crée un volume anonyme pour que Prometheus puisse écrire ses données sans toucher au workspace Jenkins
-      - /prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/tmp/prometheus'
     networks:
       - proshop-network
 

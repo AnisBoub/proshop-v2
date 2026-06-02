@@ -45,13 +45,38 @@ pipeline {
             steps {
                 echo '===== Deploiement ====='
                 sh '''
-                # Arrêt et nettoyage propre
+                # 1. Arrêt propre des conteneurs
                 docker compose down --volumes || true
                 
-                # Lancement standard
+                # 2. Nettoyage du faux dossier créé par erreur et réécriture propre du fichier
+                if [ -d "prometheus/prometheus.yml" ]; then
+                    rm -rf prometheus/prometheus.yml
+                fi
+                
+                mkdir -p prometheus
+                cat << 'EOF' > prometheus/prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['127.0.0.1:9090']
+
+  - job_name: 'backend'
+    static_configs:
+      - targets: ['backend:5000']
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+EOF
+
+                # 3. Lancement de l'application
                 docker compose up -d --build --force-recreate
                 
-                # Attente du démarrage et injection des données de test
+                # 4. Attente et injection des données de test
                 sleep 15
                 docker compose exec -T backend node backend/seeder.js || true
                 '''
