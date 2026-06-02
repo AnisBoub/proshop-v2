@@ -4,7 +4,6 @@ pipeline {
     environment {
         DOCKER_IMAGE_BACKEND  = "proshop-backend:latest"
         DOCKER_IMAGE_FRONTEND = "proshop-frontend:latest"
-        DOCKER_COMPOSE_FILE   = "docker-compose.yml"
     }
 
     stages {
@@ -15,6 +14,7 @@ pipeline {
                 sh 'ls -la'
                 sh 'echo "Git Branch: ${GIT_BRANCH}"'
                 sh 'echo "Build Number: ${BUILD_NUMBER}"'
+                sh 'echo "Build ID: ${BUILD_ID}"'
             }
         }
 
@@ -32,7 +32,7 @@ pipeline {
                 echo '===== Debug Frontend Build Context ====='
                 sh 'ls -la frontend/'
                 sh 'test -f frontend/nginx.conf && echo "✅ nginx.conf existe" || echo "❌ nginx.conf manque"'
-                sh 'cat frontend/Dockerfile'
+                sh 'head -20 frontend/Dockerfile'
             }
         }
 
@@ -49,12 +49,10 @@ pipeline {
                 script {
                     if (fileExists('frontend/nginx.conf')) {
                         echo '✅ nginx.conf trouvé - Build en cours...'
-                        sh 'cat frontend/nginx.conf | head -10'
                     } else {
                         echo '⚠️  nginx.conf non trouvé - Build sans configuration personnalisée'
                     }
                 }
-                // Build depuis la racine avec contexte complet
                 sh 'docker build --no-cache -t ${DOCKER_IMAGE_FRONTEND} -f frontend/Dockerfile .'
             }
         }
@@ -64,7 +62,7 @@ pipeline {
                 echo '===== Arret des anciens conteneurs ====='
                 script {
                     try {
-                        sh 'docker compose down --volumes --remove-orphans'
+                        sh 'docker compose down --volumes --remove-orphans || true'
                     } catch (Exception e) {
                         echo "Aucun conteneur existant ou erreur ignorée: ${e.message}"
                     }
@@ -72,17 +70,56 @@ pipeline {
             }
         }
 
+        stage('Prepare Prometheus Config') {
+            steps {
+                echo '===== Preparation de la configuration Prometheus ====='
+                script {
+                    sh '''
+                        # Nettoyer l'ancienne configuration si corrompue
+                        if [ -d "prometheus/prometheus.yml" ]; then
+                            echo "⚠️  Suppression du dossier prometheus.yml corrompu..."
+                            rm -rf prometheus/prometheus.yml
+                        fi
+                        
+                        # Créer le dossier prometheus
+                        mkdir -p prometheus
+                        
+                        # Créer le fichier prometheus.yml avec la configuration complète
+                        cat > prometheus/prometheus.yml << 'EOF'
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'proshop-backend'
+    scrape_interval: 5s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['backend:5000']
+EOF
+                        
+                        # Vérifier que c'est bien un fichier
+                        if [ -f "prometheus/prometheus.yml" ]; then
+                            echo "✅ prometheus.yml est un fichier valide"
+                            ls -la prometheus/prometheus.yml
+                        else
+                            echo "❌ Erreur: prometheus.yml n'est pas un fichier"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
         stage('Deploy') {
             steps {
                 echo '===== Deploiement ====='
-                
-                // Créer le dossier prometheus s'il n'existe pas
-                sh 'mkdir -p prometheus'
-                
-                // Démarrer les services
                 sh 'docker compose up -d --force-recreate'
                 
-                // Attendre que les services soient prêts
                 echo 'Attente du démarrage des services...'
                 sleep time: 30, unit: 'SECONDS'
             }
@@ -97,19 +134,18 @@ pipeline {
                         def backendRunning = sh(script: 'docker ps -q -f name=backend', returnStdout: true).trim()
                         
                         if (backendRunning) {
-                            // Attendre que le backend soit prêt
                             echo 'Attente que le backend soit disponible...'
                             sh 'timeout 60 bash -c \'while ! curl -s http://localhost:5000/api/products > /dev/null; do sleep 2; done\''
                             
-                            // Exécuter le seeder
+                            echo 'Execution du seeder...'
                             sh 'docker compose exec -T backend node backend/seeder.js'
                             echo '✅ Seed execute avec succes'
                         } else {
                             echo '⚠️  Conteneur backend non trouvé, skipping seed'
                         }
                     } catch (Exception e) {
-                        echo "Erreur lors du seeding: ${e.message}"
-                        // Ne pas faire échouer le pipeline pour une erreur de seeding
+                        echo "⚠️  Erreur lors du seeding: ${e.message}"
+                        echo 'Le seeding a échoué mais le pipeline continue...'
                     }
                 }
             }
@@ -117,19 +153,40 @@ pipeline {
 
         stage('Verify') {
             steps {
-                echo '===== Verification ====='
+                echo '===== Verification des services ====='
                 sh 'docker ps'
+                echo ''
                 echo '----- Services Docker Compose -----'
                 sh 'docker compose ps'
+                echo ''
                 echo '----- Tests de connectivite -----'
                 script {
                     try {
                         echo 'Test Backend API...'
-                        sh 'curl -s http://localhost:5000/api/products | head -c 200 || echo "Backend non disponible"'
+                        def backendTest = sh(script: 'curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/api/products', returnStdout: true).trim()
+                        if (backendTest == '200') {
+                            echo '✅ Backend API: OK (HTTP 200)'
+                        } else {
+                            echo "⚠️  Backend API: HTTP ${backendTest}"
+                        }
+                        
                         echo ''
                         echo 'Test Frontend...'
-                        sh 'curl -s http://localhost:3000 | head -c 200 || echo "Frontend non disponible"'
+                        def frontendTest = sh(script: 'curl -s -o /dev/null -w "%{http_code}" http://localhost:3000', returnStdout: true).trim()
+                        if (frontendTest == '200') {
+                            echo '✅ Frontend: OK (HTTP 200)'
+                        } else {
+                            echo "⚠️  Frontend: HTTP ${frontendTest}"
+                        }
+                        
                         echo ''
+                        echo 'Test Prometheus...'
+                        def promTest = sh(script: 'curl -s -o /dev/null -w "%{http_code}" http://localhost:9090', returnStdout: true).trim()
+                        if (promTest == '200') {
+                            echo '✅ Prometheus: OK (HTTP 200)'
+                        } else {
+                            echo "⚠️  Prometheus: HTTP ${promTest}"
+                        }
                     } catch (Exception e) {
                         echo "Erreur lors des tests: ${e.message}"
                     }
@@ -140,34 +197,51 @@ pipeline {
 
     post {
         success {
-            echo '================================='
+            echo '=========================================='
             echo '✅ PIPELINE EXECUTE AVEC SUCCES'
-            echo '================================='
-            echo 'Frontend   : http://localhost:3000'
-            echo 'Backend    : http://localhost:5000'
-            echo 'Prometheus : http://localhost:9090'
-            echo '================================='
+            echo '=========================================='
+            echo '📍 Frontend   : http://localhost:3000'
+            echo '📍 Backend    : http://localhost:5000'
+            echo '📍 Prometheus : http://localhost:9090'
+            echo '=========================================='
+            echo '📝 API Endpoints:'
+            echo '   - GET  /api/products'
+            echo '   - GET  /api/users'
+            echo '   - POST /api/users/login'
+            echo '=========================================='
         }
+        
         failure {
-            echo '================================='
+            echo '=========================================='
             echo '❌ ECHEC DU PIPELINE JENKINS'
-            echo '================================='
+            echo '=========================================='
             echo 'Erreur pendant le pipeline. Verifiez les logs ci-dessus.'
-            
-            // Afficher les logs Docker pour debug
+            echo ''
+            echo 'Debug - Derniers logs Docker:'
             script {
                 try {
-                    echo '----- DERNIERS LOGS DOCKER -----'
-                    sh 'docker compose logs --tail=50'
+                    sh 'echo "----- Logs MongoDB -----"'
+                    sh 'docker compose logs mongo --tail=20 || echo "MongoDB logs non disponibles"'
+                    sh 'echo ""'
+                    sh 'echo "----- Logs Backend -----"'
+                    sh 'docker compose logs backend --tail=20 || echo "Backend logs non disponibles"'
+                    sh 'echo ""'
+                    sh 'echo "----- Logs Frontend -----"'
+                    sh 'docker compose logs frontend --tail=20 || echo "Frontend logs non disponibles"'
+                    sh 'echo ""'
+                    sh 'echo "----- Logs Prometheus -----"'
+                    sh 'docker compose logs prometheus --tail=20 || echo "Prometheus logs non disponibles"'
                 } catch (Exception e) {
                     echo "Impossible d obtenir les logs: ${e.message}"
                 }
             }
+            echo '=========================================='
         }
+        
         always {
             echo '===== Fin du pipeline ====='
-            // Nettoyage optionnel (décommentez si nécessaire)
-            // sh 'docker system prune -f'
+            // Nettoyage des images docker non utilisées (optionnel)
+            // sh 'docker image prune -f'
         }
     }
 }
