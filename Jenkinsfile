@@ -27,19 +27,35 @@ pipeline {
             }
         }
 
+        stage('Debug Frontend Context') {
+            steps {
+                echo '===== Debug Frontend Build Context ====='
+                sh 'ls -la frontend/'
+                sh 'test -f frontend/nginx.conf && echo "✅ nginx.conf existe" || echo "❌ nginx.conf manque"'
+                sh 'cat frontend/Dockerfile'
+            }
+        }
+
         stage('Build Backend') {
             steps {
                 echo '===== Build Backend ====='
-                // Build depuis la racine avec Dockerfile spécifique
-                sh "docker build --no-cache -t ${DOCKER_IMAGE_BACKEND} -f backend/Dockerfile ."
+                sh 'docker build --no-cache -t ${DOCKER_IMAGE_BACKEND} -f backend/Dockerfile .'
             }
         }
 
         stage('Build Frontend') {
             steps {
                 echo '===== Build Frontend ====='
-                // Build depuis la racine avec Dockerfile spécifique
-                sh "docker build --no-cache -t ${DOCKER_IMAGE_FRONTEND} -f frontend/Dockerfile ."
+                script {
+                    if (fileExists('frontend/nginx.conf')) {
+                        echo '✅ nginx.conf trouvé - Build en cours...'
+                        sh 'cat frontend/nginx.conf | head -10'
+                    } else {
+                        echo '⚠️  nginx.conf non trouvé - Build sans configuration personnalisée'
+                    }
+                }
+                // Build depuis la racine avec contexte complet
+                sh 'docker build --no-cache -t ${DOCKER_IMAGE_FRONTEND} -f frontend/Dockerfile .'
             }
         }
 
@@ -82,13 +98,14 @@ pipeline {
                         
                         if (backendRunning) {
                             // Attendre que le backend soit prêt
+                            echo 'Attente que le backend soit disponible...'
                             sh 'timeout 60 bash -c \'while ! curl -s http://localhost:5000/api/products > /dev/null; do sleep 2; done\''
                             
                             // Exécuter le seeder
                             sh 'docker compose exec -T backend node backend/seeder.js'
-                            echo 'Seed execute avec succes'
+                            echo '✅ Seed execute avec succes'
                         } else {
-                            echo 'Conteneur backend non trouvé, skipping seed'
+                            echo '⚠️  Conteneur backend non trouvé, skipping seed'
                         }
                     } catch (Exception e) {
                         echo "Erreur lors du seeding: ${e.message}"
@@ -107,8 +124,12 @@ pipeline {
                 echo '----- Tests de connectivite -----'
                 script {
                     try {
+                        echo 'Test Backend API...'
                         sh 'curl -s http://localhost:5000/api/products | head -c 200 || echo "Backend non disponible"'
+                        echo ''
+                        echo 'Test Frontend...'
                         sh 'curl -s http://localhost:3000 | head -c 200 || echo "Frontend non disponible"'
+                        echo ''
                     } catch (Exception e) {
                         echo "Erreur lors des tests: ${e.message}"
                     }
@@ -120,27 +141,23 @@ pipeline {
     post {
         success {
             echo '================================='
-            echo 'PIPELINE EXECUTE AVEC SUCCES'
+            echo '✅ PIPELINE EXECUTE AVEC SUCCES'
             echo '================================='
             echo 'Frontend   : http://localhost:3000'
             echo 'Backend    : http://localhost:5000'
             echo 'Prometheus : http://localhost:9090'
             echo '================================='
-            
-            // Optionnel: Envoyer une notification
-            // emailext subject: "Pipeline Reussi: ${JOB_NAME} - ${BUILD_NUMBER}",
-            //          body: "Le build ${BUILD_URL} a reussi!",
-            //          to: "team@example.com"
         }
         failure {
             echo '================================='
-            echo 'ECHEC DU PIPELINE JENKINS'
+            echo '❌ ECHEC DU PIPELINE JENKINS'
             echo '================================='
             echo 'Erreur pendant le pipeline. Verifiez les logs ci-dessus.'
             
-            // Optionnel: Afficher les logs Docker pour debug
+            // Afficher les logs Docker pour debug
             script {
                 try {
+                    echo '----- DERNIERS LOGS DOCKER -----'
                     sh 'docker compose logs --tail=50'
                 } catch (Exception e) {
                     echo "Impossible d obtenir les logs: ${e.message}"
@@ -149,7 +166,7 @@ pipeline {
         }
         always {
             echo '===== Fin du pipeline ====='
-            // Nettoyage optionnel
+            // Nettoyage optionnel (décommentez si nécessaire)
             // sh 'docker system prune -f'
         }
     }
