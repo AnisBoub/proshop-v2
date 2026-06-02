@@ -51,6 +51,7 @@ services:
       - ./prometheus:/etc/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/tmp/prometheus' # Évite les conflits d'écriture sur le workspace Jenkins
     networks:
       - proshop-network
 
