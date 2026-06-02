@@ -45,10 +45,10 @@ pipeline {
             steps {
                 echo '===== Deploiement ====='
                 sh '''
-                docker compose down || true
-                docker compose up -d --build
+                docker compose down --volumes || true
+                docker compose up -d --build --force-recreate
                 sleep 10
-                docker compose exec -T backend node backend/seeder.js
+                docker compose exec -T backend node backend/seeder.js || true
                 '''
             }
         }
