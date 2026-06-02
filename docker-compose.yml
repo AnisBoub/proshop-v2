@@ -5,7 +5,7 @@ services:
     ports:
       - '27017:27017'
     volumes:
-      - mongo-data:/data/db # Nettoyé : Utilise un volume Docker sécurisé
+      - mongo-data:/data/db # Corrigé : Volume nommé stable
     networks:
       - proshop-network
 
@@ -45,7 +45,7 @@ services:
     build:
       context: ./prometheus
       dockerfile: Dockerfile
-    image: proshop-prometheus:latest # Utilise votre image packagée sans volume !
+    image: proshop-prometheus:latest # Corrigé : Utilise votre build personnalisé
     user: 'root'
     restart: always
     ports:
@@ -61,7 +61,7 @@ services:
     ports:
       - '3001:3000'
     volumes:
-      - grafana-storage:/var/lib/grafana # Nouveau : Sauvegarde vos dashboards automatiquement !
+      - grafana-storage:/var/lib/grafana # Optionnel mais recommandé pour sauvegarder vos dashboards
     networks:
       - proshop-network
 
@@ -78,5 +78,5 @@ networks:
     driver: bridge
 
 volumes:
-  mongo-data: # Déclaration du volume pour MongoDB
-  grafana-storage: # Déclaration du volume pour Grafana
+  mongo-data: # Déclaration du volume sécurisé pour MongoDB
+  grafana-storage: # Déclaration du volume sécurisé pour Grafana
