@@ -2,7 +2,8 @@ import path from 'path';
 import express from 'express';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import client from 'prom-client'; // Import du client Prometheus
+import cors from 'cors';
+import client from 'prom-client';
 
 dotenv.config();
 import connectDB from './config/db.js';
@@ -14,9 +15,21 @@ import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
 const port = process.env.PORT || 5000;
 
+// Connexion à la base de données
 connectDB();
 
 const app = express();
+
+// ==========================================
+// CONFIGURATION DE SÉCURITÉ (CORS)
+// ==========================================
+// Permet au frontend sur le port 3000 de requêter cette API sans blocage navigateur
+app.use(
+  cors({
+    origin: 'http://localhost:3000',
+    credentials: true,
+  })
+);
 
 // ==========================================
 // CONFIGURATION PROMETHEUS (MÉTRIQUES)
@@ -102,7 +115,7 @@ app.use(notFound);
 app.use(errorHandler);
 
 // ==========================================
-// CORRECTION : ÉCOUTE DU SERVEUR SUR 0.0.0.0
+// ÉCOUTE DU SERVEUR
 // ==========================================
 app.listen(port, '0.0.0.0', () =>
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${port}`)
