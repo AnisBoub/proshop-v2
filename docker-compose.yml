@@ -41,6 +41,7 @@ services:
 
   prometheus:
     image: prom/prometheus
+    user: 'root'
     restart: always
     ports:
       - '9090:9090'
