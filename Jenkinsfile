@@ -1,108 +1,79 @@
 pipeline {
     agent any
 
-    stages {
+    environment {
+        // Définition des variables d'environnement globales si nécessaire
+        DOCKER_IMAGE_BACKEND  = "proshop-backend:latest"
+        DOCKER_IMAGE_FRONTEND = "proshop-frontend:latest"
+    }
 
+    stages {
         stage('Informations') {
             steps {
                 echo '===== Informations ====='
-                sh '''
-                pwd
-                ls -la
-                '''
+                sh 'pwd'
+                sh 'ls -la'
             }
         }
 
         stage('Docker Test') {
             steps {
                 echo '===== Verification Docker ====='
-                sh '''
-                docker --version
-                docker ps
-                '''
+                sh 'docker --version'
+                sh 'docker ps'
             }
         }
 
         stage('Build Backend') {
             steps {
                 echo '===== Build Backend ====='
-                sh '''
-                docker build -t proshop-backend:latest -f backend/Dockerfile .
-                '''
+                // Build de l'image Backend
+                sh 'docker build -t ${DOCKER_IMAGE_BACKEND} -f backend/Dockerfile .'
             }
         }
 
         stage('Build Frontend') {
             steps {
                 echo '===== Build Frontend ====='
-                sh '''
-                docker build -t proshop-frontend:latest frontend/
-                '''
+                // Ajout de --no-cache pour forcer l'inclusion du nouveau nginx.conf corrigé
+                sh 'docker build --no-cache -t ${DOCKER_IMAGE_FRONTEND} frontend/'
             }
         }
 
         stage('Deploy') {
             steps {
                 echo '===== Deploiement ====='
-                sh '''
-                # 1. Nettoyage et arrêt
-                docker compose down --volumes --remove-orphans || true
+                // Arrêt des conteneurs précédents, nettoyage des volumes et des orphelins
+                sh 'docker compose down --volumes --remove-orphans'
                 
-                # 2. On s'assure que le dossier local existe et on écrit le fichier au propre
-                mkdir -p prometheus
-                cat << 'EOF' > prometheus/prometheus.yml
-global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
-
-scrape_configs:
-  - job_name: 'prometheus'
-    static_configs:
-      - targets: ['127.0.0.1:9090']
-
-  - job_name: 'backend'
-    static_configs:
-      - targets: ['backend:5000']
-
-  - job_name: 'node-exporter'
-    static_configs:
-      - targets: ['node-exporter:9100']
-EOF
-
-                # Si vous avez mis le Dockerfile dans le dossier prometheus, créez-le ici dynamiquement si besoin :
-                cat << 'EOF' > prometheus/Dockerfile
-FROM prom/prometheus:latest
-COPY prometheus.yml /etc/prometheus/prometheus.yml
-EOF
-
-                # 3. Lancement du Build global et déploiement (incluant notre nouveau Prometheus personnalisé)
-                docker compose up -d --build --force-recreate
+                // Préparation du dossier prometheus si nécessaire
+                sh 'mkdir -p prometheus'
                 
-                # 4. Attente et injection de données
-                sleep 15
-                docker compose exec -T backend node backend/seeder.js || true
-                '''
+                // Lancement de l'architecture Docker Compose avec forçage du build interne
+                sh 'docker compose up -d --build --force-recreate'
+                
+                // Attente pour s'assurer que la base MongoDB et Node.js soient prêts
+                sleep time: 15, unit: 'SECONDS'
+                
+                // Exécution du script de peuplement de la base de données (Seeder)
+                sh 'docker compose exec -T backend node backend/seeder.js'
             }
         }
 
         stage('Verify') {
             steps {
                 echo '===== Verification ====='
-                sh '''
-                docker ps
-
-                echo "----- Services Docker Compose -----"
-                docker compose ps
-
-                echo "----- Verification fichiers -----"
-                ls -R
-                '''
+                // Vérification de l'état général des conteneurs système
+                sh 'docker ps'
+                echo '----- Services Docker Compose -----'
+                sh 'docker compose ps'
+                echo '----- Verification fichiers -----'
+                sh 'ls -R'
             }
         }
     }
 
     post {
-
         success {
             echo '================================='
             echo 'PIPELINE EXECUTE AVEC SUCCES'
@@ -113,10 +84,9 @@ EOF
             echo 'Prometheus : http://localhost:9090'
             echo 'Grafana    : http://localhost:3001'
         }
-
         failure {
             echo '================================='
-            echo 'ECHEC DU PIPELINE'
+            echo 'ECHEC DU PIPELINE JENKINS'
             echo '================================='
         }
     }
