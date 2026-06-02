@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        // Définition des variables d'environnement globales
         DOCKER_IMAGE_BACKEND  = "proshop-backend:latest"
         DOCKER_IMAGE_FRONTEND = "proshop-frontend:latest"
     }
@@ -11,23 +10,23 @@ pipeline {
         stage('Informations') {
             steps {
                 echo '===== Informations ====='
-                sh 'pwd'
-                sh 'ls -la'
+                sh 'pwd' [cite: 2]
+                sh 'ls -la' [cite: 2]
             }
         }
 
         stage('Docker Test') {
             steps {
                 echo '===== Verification Docker ====='
-                sh 'docker --version'
-                sh 'docker ps'
+                sh 'docker --version' [cite: 3]
+                sh 'docker ps' [cite: 3]
             }
         }
 
         stage('Build Backend') {
             steps {
                 echo '===== Build Backend ====='
-                // Ajout de --no-cache pour forcer l'inclusion du server.js corrigé (0.0.0.0)
+                // Force le build propre de l'image de Jenkins
                 sh 'docker build --no-cache -t ${DOCKER_IMAGE_BACKEND} -f backend/Dockerfile .'
             }
         }
@@ -35,7 +34,7 @@ pipeline {
         stage('Build Frontend') {
             steps {
                 echo '===== Build Frontend ====='
-                // Maintien du --no-cache pour l'inclusion du nginx.conf
+                // Force le build propre de l'image de Jenkins
                 sh 'docker build --no-cache -t ${DOCKER_IMAGE_FRONTEND} frontend/'
             }
         }
@@ -43,51 +42,45 @@ pipeline {
         stage('Deploy') {
             steps {
                 echo '===== Deploiement ====='
-                // Arrêt des conteneurs précédents, nettoyage des volumes et des orphelins
-                sh 'docker compose down --volumes --remove-orphans'
+                // Arrêt des conteneurs précédents et nettoyage complet des volumes
+                sh 'docker compose down --volumes --remove-orphans' [cite: 7]
                 
-                // Préparation du dossier prometheus si nécessaire
-                sh 'mkdir -p prometheus'
+                sh 'mkdir -p prometheus' [cite: 7]
                 
-                // Lancement de l'architecture Docker Compose
+                // ============================================================
+                // CORRECTION CRITIQUE : Retrait du flag --build
+                // On force l'utilisation stricte des images créées ci-dessus
+                // ============================================================
                 sh 'docker compose up -d --force-recreate'
                 
-                // Attente pour s'assurer que la base MongoDB et Node.js soient prêts
-                sleep time: 15, unit: 'SECONDS'
+                sleep time: 15, unit: 'SECONDS' [cite: 8]
                 
-                // Exécution du script de peuplement de la base de données (Seeder)
-                sh 'docker compose exec -T backend node backend/seeder.js'
+                sh 'docker compose exec -T backend node backend/seeder.js' [cite: 9]
             }
         }
 
         stage('Verify') {
             steps {
                 echo '===== Verification ====='
-                // Vérification de l'état général des conteneurs système
-                sh 'docker ps'
+                sh 'docker ps' [cite: 10]
                 echo '----- Services Docker Compose -----'
-                sh 'docker compose ps'
-                echo '----- Verification fichiers -----'
-                sh 'ls -R'
+                sh 'docker compose ps' [cite: 10]
             }
         }
     }
 
     post {
         success {
-            echo '================================='
-            echo 'PIPELINE EXECUTE AVEC SUCCES'
-            echo '================================='
-            echo 'Frontend   : http://localhost:3000'
-            echo 'Backend    : http://localhost:5000'
-            echo 'MongoDB    : localhost:27017'
-            echo 'Prometheus : http://localhost:9090'
-            echo 'Grafana    : http://localhost:3001'
+            echo '=================================' [cite: 12]
+            echo 'PIPELINE EXECUTE AVEC SUCCES' [cite: 12]
+            echo '=================================' [cite: 12]
+            echo 'Frontend   : http://localhost:3000' [cite: 12]
+            echo 'Backend    : http://localhost:5000' [cite: 12]
         }
         failure {
-            echo '================================='
-            echo 'ECHEC DU PIPELINE JENKINS'
-            echo '================================='
+            echo '=================================' [cite: 13]
+            echo 'ECHEC DU PIPELINE JENKINS' [cite: 13]
+            echo '=================================' [cite: 13]
         }
     }
 }
