@@ -5,7 +5,7 @@ services:
     ports:
       - '27017:27017'
     volumes:
-      - mongo-data:/data/db
+      - mongo-data:/data/db # Nettoyé : Utilise un volume Docker sécurisé
     networks:
       - proshop-network
 
@@ -45,19 +45,13 @@ services:
     build:
       context: ./prometheus
       dockerfile: Dockerfile
-    # OU SI VOUS LE METTEZ À LA RACINE :
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile.prometheus
-    image: proshop-prometheus:latest
+    image: proshop-prometheus:latest # Utilise votre image packagée sans volume !
     user: 'root'
     restart: always
     ports:
       - '9090:9090'
-    # PLUS AUCUN VOLUME SUR LE FICHIER CONFIG ICI !
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/tmp/prometheus'
     networks:
       - proshop-network
 
@@ -66,6 +60,8 @@ services:
     restart: always
     ports:
       - '3001:3000'
+    volumes:
+      - grafana-storage:/var/lib/grafana # Nouveau : Sauvegarde vos dashboards automatiquement !
     networks:
       - proshop-network
 
@@ -82,5 +78,5 @@ networks:
     driver: bridge
 
 volumes:
-  mongo-data:
-  prometheus-data:
+  mongo-data: # Déclaration du volume pour MongoDB
+  grafana-storage: # Déclaration du volume pour Grafana
