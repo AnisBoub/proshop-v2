@@ -1,82 +1,54 @@
+version: '3.8'
+
 services:
   mongo:
     image: mongo:6
-    restart: always
-    ports:
-      - '27017:27017'
-    volumes:
-      - mongo-data:/data/db # Corrigé : Volume nommé stable
+    container_name: mongo
     networks:
-      - proshop-network
+      proshop-network:
+        aliases:
+          - mongo
+    # ... reste de votre config (ports, volumes)
 
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    image: proshop-backend:latest
-    restart: always
-    ports:
-      - '5000:5000'
+    container_name: backend
     environment:
-      NODE_ENV: development
-      PORT: 5000
-      MONGO_URI: mongodb://mongo:27017/proshop
-      JWT_SECRET: abc123
-      PAYPAL_CLIENT_ID: sb
-    depends_on:
-      - mongo
+      - MONGO_URI=mongodb://mongo:27017/proshop
     networks:
-      - proshop-network
+      proshop-network:
+        aliases:
+          - backend
+    # ... reste de votre config
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: proshop-frontend:latest
-    restart: always
+    container_name: frontend
     ports:
       - '3000:80'
+    networks:
+      proshop-network:
+        aliases:
+          - frontend
     depends_on:
       - backend
-    networks:
-      - proshop-network
 
   prometheus:
     build:
       context: ./prometheus
-      dockerfile: Dockerfile
-    image: proshop-prometheus:latest # Corrigé : Utilise votre build personnalisé
-    user: 'root'
-    restart: always
+      dockerfile: Dockerfile.prometheus
+    container_name: prometheus
     ports:
       - '9090:9090'
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
     networks:
-      - proshop-network
-
-  grafana:
-    image: grafana/grafana
-    restart: always
-    ports:
-      - '3001:3000'
-    volumes:
-      - grafana-storage:/var/lib/grafana # Optionnel mais recommandé pour sauvegarder vos dashboards
-    networks:
-      - proshop-network
-
-  node-exporter:
-    image: prom/node-exporter
-    restart: always
-    ports:
-      - '9100:9100'
-    networks:
-      - proshop-network
+      proshop-network:
+        aliases:
+          - prometheus
 
 networks:
   proshop-network:
     driver: bridge
-
-volumes:
-  mongo-data: # Déclaration du volume sécurisé pour MongoDB
-  grafana-storage: # Déclaration du volume sécurisé pour Grafana
