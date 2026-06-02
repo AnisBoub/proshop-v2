@@ -98,7 +98,7 @@ EOF
             steps {
                 echo "===== Deploiement ====="
                 sh "docker compose up -d --force-recreate --build"
-                echo "Attente initiale du démarrage des services..."
+                echo "Attente du démarrage des services..."
                 sleep 15
             }
         }
@@ -107,24 +107,13 @@ EOF
             steps {
                 script {
                     echo "===== Seed de la base de données ====="
-                    echo "Attente que l'API du backend soit accessible via la passerelle hôte..."
-                    
                     try {
-                        timeout(time: 45, unit: 'SECONDS') {
-                            // CORRECTION CRITIQUE : Utilisation de la passerelle par défaut Docker (172.17.0.1) ou localhost sur le port exposé 5000
-                            sh """
-                            until [ "\$(curl -s -o /dev/null -w '%{http_code}' http://172.17.0.1:5000/api/health || curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/api/health)" = "200" ]; do
-                                echo "L'interface réseau externe n'est pas encore prête, attente..."
-                                sleep 3
-                            done
-                            """
-                        }
-                        echo "✅ Le Backend répond de l'extérieur ! Lancement du seeding..."
+                        echo "Lancement du seeding à l'intérieur du conteneur Backend..."
                         sh "docker compose exec -T backend npm run data:import"
                         echo "✅ Seeding terminé avec succès."
                     } catch (err) {
-                        echo "⚠️ Problème d'accès réseau direct pour curl, mais tentative forcée d'importation locale dans le conteneur..."
-                        sh "docker compose exec -T backend npm run data:import || true"
+                        echo "❌ Échec lors de l'exécution du seeder."
+                        error "Le seeding de la base de données a échoué."
                     }
                 }
             }
@@ -135,20 +124,24 @@ EOF
                 echo "===== Verification des services ====="
                 sh "docker compose ps"
                 echo ""
-                echo "----- Tests de connectivite externe -----"
+                echo "----- Tests de connectivite interne au réseau Docker -----"
                 script {
                     try {
-                        // CORRECTION CRITIQUE : Test via l'IP de la passerelle hôte accessible par Jenkins
-                        def statusCode = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://172.17.0.1:5000/api/health || curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/api/health", returnStdout: true).trim()
-                        echo "Code HTTP reçu de l'API : ${statusCode}"
+                        // REQUÊTE LOCALE : On effectue le curl depuis le conteneur backend vers lui-même (localhost:5000)
+                        def statusCodeBackend = sh(script: "docker compose exec -T backend curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/api/health", returnStdout: true).trim()
+                        echo "Vérification de l'API Backend (interne) : Code HTTP ${statusCodeBackend}"
                         
-                        if (statusCode == "200") {
-                            echo "✅ Test de connectivité réussi (HTTP 200) !"
+                        // REQUÊTE CROISÉE : On teste si le conteneur frontend arrive à joindre l'api backend via le réseau docker compose
+                        def statusCodeFrontendToBackend = sh(script: "docker compose exec -T frontend curl -s -o /dev/null -w '%{http_code}' http://backend:5000/api/health", returnStdout: true).trim()
+                        echo "Vérification de la liaison Frontend -> Backend : Code HTTP ${statusCodeFrontendToBackend}"
+
+                        if (statusCodeBackend == "200") {
+                            echo "✅ L'application ProShop est saine et répond parfaitement !"
                         } else {
-                            echo "⚠️ Code inattendu ou Jenkins isolé du réseau. Statut brut : ${statusCode}"
+                            echo "⚠️ L'application a démarré mais l'endpoint de santé renvoie un statut instable : ${statusCodeBackend}"
                         }
                     } catch (err) {
-                        echo "⚠️ Échec de la commande curl depuis le conteneur Jenkins."
+                        echo "⚠️ Impossible de valider avec curl à travers les conteneurs (vérifiez si curl est installé dans vos images)."
                     }
                 }
             }
