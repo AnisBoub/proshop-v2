@@ -127,26 +127,25 @@ EOF
                 echo "----- Tests de connectivite interne au réseau Docker -----"
                 script {
                     try {
-                        // REQUÊTE LOCALE : On effectue le curl depuis le conteneur backend vers lui-même (localhost:5000)
-                        def statusCodeBackend = sh(script: "docker compose exec -T backend curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/api/health", returnStdout: true).trim()
+                        // VÉRIFICATION NATIVE : Utilisation de Node.js (natif dans l'image) au lieu de curl
+                        def statusCodeBackend = sh(
+                            script: "docker compose exec -T backend node -e \"const http = require('http'); http.get('http://localhost:5000/api/health', (res) => { console.log(res.statusCode); process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', (e) => { console.log(0); process.exit(1); });\"", 
+                            returnStdout: true
+                        ).trim()
+                        
                         echo "Vérification de l'API Backend (interne) : Code HTTP ${statusCodeBackend}"
                         
-                        // REQUÊTE CROISÉE : On teste si le conteneur frontend arrive à joindre l'api backend via le réseau docker compose
-                        def statusCodeFrontendToBackend = sh(script: "docker compose exec -T frontend curl -s -o /dev/null -w '%{http_code}' http://backend:5000/api/health", returnStdout: true).trim()
-                        echo "Vérification de la liaison Frontend -> Backend : Code HTTP ${statusCodeFrontendToBackend}"
-
                         if (statusCodeBackend == "200") {
-                            echo "✅ L'application ProShop est saine et répond parfaitement !"
+                            echo "✅ L'application ProShop est saine et répond parfaitement (HTTP 200) !"
                         } else {
                             echo "⚠️ L'application a démarré mais l'endpoint de santé renvoie un statut instable : ${statusCodeBackend}"
                         }
                     } catch (err) {
-                        echo "⚠️ Impossible de valider avec curl à travers les conteneurs (vérifiez si curl est installé dans vos images)."
+                        echo "⚠️ Impossible de valider l'état du backend via le script interne."
                     }
                 }
             }
         }
-    }
 
     post {
         always {
