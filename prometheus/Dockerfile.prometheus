@@ -1,0 +1,3 @@
+FROM prom/prometheus:latest
+# On copie le fichier généré par le pipeline directement au bon endroit dans l'image
+COPY prometheus.yml /etc/prometheus/prometheus.yml

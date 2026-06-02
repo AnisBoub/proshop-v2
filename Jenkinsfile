@@ -45,14 +45,10 @@ pipeline {
             steps {
                 echo '===== Deploiement ====='
                 sh '''
-                # 1. Arrêt complet et suppression agressive des conteneurs/volumes associés
+                # 1. Nettoyage et arrêt
                 docker compose down --volumes --remove-orphans || true
                 
-                # 2. Utilisation d'un conteneur Alpine temporaire en tant que ROOT Docker 
-                # pour forcer la suppression du faux dossier bloquant s'il existe
-                docker run --rm -v $(pwd):/workspace alpine rm -rf /workspace/prometheus/prometheus.yml || true
-                
-                # 3. Recréation propre de l'arborescence et du fichier de configuration
+                # 2. On s'assure que le dossier local existe et on écrit le fichier au propre
                 mkdir -p prometheus
                 cat << 'EOF' > prometheus/prometheus.yml
 global:
@@ -73,10 +69,16 @@ scrape_configs:
       - targets: ['node-exporter:9100']
 EOF
 
-                # 4. Relancement propre de l'environnement
+                # Si vous avez mis le Dockerfile dans le dossier prometheus, créez-le ici dynamiquement si besoin :
+                cat << 'EOF' > prometheus/Dockerfile
+FROM prom/prometheus:latest
+COPY prometheus.yml /etc/prometheus/prometheus.yml
+EOF
+
+                # 3. Lancement du Build global et déploiement (incluant notre nouveau Prometheus personnalisé)
                 docker compose up -d --build --force-recreate
                 
-                # 5. Attente du démarrage et injection des données
+                # 4. Attente et injection de données
                 sleep 15
                 docker compose exec -T backend node backend/seeder.js || true
                 '''

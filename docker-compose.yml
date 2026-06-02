@@ -42,13 +42,19 @@ services:
       - proshop-network
 
   prometheus:
-    image: prom/prometheus
+    build:
+      context: ./prometheus
+      dockerfile: Dockerfile
+    # OU SI VOUS LE METTEZ À LA RACINE :
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.prometheus
+    image: proshop-prometheus:latest
     user: 'root'
     restart: always
     ports:
       - '9090:9090'
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    # PLUS AUCUN VOLUME SUR LE FICHIER CONFIG ICI !
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/tmp/prometheus'
