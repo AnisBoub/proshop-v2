@@ -46,9 +46,23 @@ services:
     networks:
       - proshop-network
 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - '3001:3000' # Accessible sur votre PC via http://localhost:3001
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - proshop-network
+    restart: unless-stopped
+
 networks:
   proshop-network:
     driver: bridge
 
 volumes:
   mongo_data:
+  grafana_data:
