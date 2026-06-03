@@ -70,14 +70,16 @@ app.use(cookieParser());
 // ==========================================
 // ROUTES DE L'API
 // ==========================================
+
+// Endpoint de santé pour le pipeline Jenkins
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'UP', timestamp: new Date() });
+});
+
 app.use('/api/products', productRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/upload', uploadRoutes);
-
-app.get('/api/config/paypal', (req, res) =>
-  res.send({ clientId: process.env.PAYPAL_CLIENT_ID })
-);
 
 // ==========================================
 // CONFIGURATION GESTION STATIQUE & RACINE
